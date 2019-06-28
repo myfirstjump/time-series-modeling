@@ -3,7 +3,8 @@
 
 ## Download the data from URL
 data_url <- 'https://od.cdc.gov.tw/eic/NHI_Influenza_like_illness.csv'
-destfile <- 'C:/Users/CJSCOPE/Documents/git-repository/acer_interview/clinic_stat.csv'
+# destfile <- 'C:/Users/CJSCOPE/Documents/git-repository/'
+destfile <- 'C:/Users/edwardchen/Documents/git-workspaces/time-series-modeling/clinic_stat.csv'
 
 download.file(data_url, destfile = destfile, mode='wb')
 
