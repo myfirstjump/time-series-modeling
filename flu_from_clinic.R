@@ -4,7 +4,7 @@
 ## Download the data from URL
 data_url <- 'https://od.cdc.gov.tw/eic/NHI_Influenza_like_illness.csv'
 destfile <- 'C:/Users/CJSCOPE/Documents/git-repository/time-series-modeling/clinic_stat.csv'
-# destfile <- 'C:/Users/edwardchen/Documents/git-workspaces/time-series-modeling/clinic_stat.csv'
+destfile <- 'C:/Users/edwardchen/Documents/git-workspaces/time-series-modeling/clinic_stat.csv'
 download.file(data_url, destfile = destfile, mode='wb')
 
 ## Cause its quite large, import data.table to read it faster.
@@ -29,12 +29,6 @@ plot(agg_data$flu, type = 'l')
 
 ## Suspect for autocorrelation
 ## Do Durbin-Watson test
-model <- lm(flu ~ date_col, data=agg_data)
-library(lmtest)
-dwtest(model)
-# p-value < 2.2e-16 -> Reject Ho: No autocorrelation
-# -> There is autocorrelation between variables -> Try to use time-series modeling method.
-
 ## add Date column
 date_col <- as.Date(paste0(agg_data$年, agg_data$週, '星期一'), "%Y%U%a")
 fill_na_date_col <- function(date_col) {
@@ -46,5 +40,35 @@ fill_na_date_col <- function(date_col) {
 }
 date_col <- fill_na_date_col(date_col)
 agg_data$date_col <- date_col
+
+model <- lm(flu ~ date_col, data=agg_data)
+library(lmtest)
+dwtest(model)
+# p-value < 2.2e-16 -> Reject Ho: No autocorrelation
+# -> There is autocorrelation between variables -> Try to use time-series modeling method.
+
+## Growth rate
+# plot(diff(log(agg_data$flu), differences = 1), type='l')
+agg_data$growth <- c(0, diff(agg_data$flu, differences = 1))
+
+## Stationary
+library(tseries)
+library(forecast)
+adf.test(agg_data$flu)
+# p-value = 0.01 -> Reject Ho: Data not stationary
+# -> Data is stationary.
+
 plot(agg_data$date_col, agg_data$flu, type = 'l')
 data_train <- agg_data[date_col < '2018-01-01',]
+
+ts_data <- ts(data_train$flu, frequency = 52)
+
+
+
+
+decomposedRes <- decompose(ts_data, type="multi")
+plot (decomposedRes)
+decomposedRes <- decompose(ts_data, type="addi")
+plot (decomposedRes)
+
+stlRes <- stl(ts_data, s.window = "periodic")
