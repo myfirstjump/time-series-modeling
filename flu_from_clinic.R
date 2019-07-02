@@ -54,7 +54,6 @@ data_train$growth <- c(0, diff(data_train$flu, differences = 1))
 
 ## Stationary
 library(tseries)
-library(forecast)
 adf.test(data_train$flu)
 # p-value = 0.01 -> Reject Ho: Data not stationary
 # -> Data is stationary.
@@ -80,14 +79,15 @@ comp_df$total <- rowSums(comp_df)
 plot(seasonal_, type='l')
 
 # seasonal pattern looks regularly, use naive model
+library(forecast)
 f_season <- forecast(decompose_mul$seasonal, method='naive', h = 52)
 # -> point estimation = f_season$mean
-plot(f_season, type='l')
+season_predict <- f_season$mean
 
 # Autoregression for trend data
 # choose lagged weeks
 vec <- c()
-for (p in c(1:20)) {
+for (p in c(1:100)) {
   model_ar <- ar.ols(trend_, order = p)
   aic <- log(sum(model_ar$resid^2, na.rm=T)/model_ar$n.used) + 2*(p+1)/model_ar$n.used
   if(do.call(sum, model_ar[2]) <　1) {
@@ -99,12 +99,27 @@ for (p in c(1:20)) {
     vec <- c(vec, as.integer(p), aic)
   }
 }
-info <- data.frame(matrix(vec, nrow=20, ncol=2, byrow=TRUE))
+info <- data.frame(matrix(vec, nrow=100, ncol=2, byrow=TRUE))
 colnames(info) <- c('Lagged', 'AIC')
-# -> choose lagged time = 18 weeks -> consider AR(p=14) for trend data
-model_ar <- ar.ols(trend_, order=14)
-predict(model_ar, n.ahead=52)$pred
+# -> choose lagged time = 98 weeks -> consider AR(p=98) for trend data
+which.min(info$AIC)
+model_ar <- ar.ols(trend_, order=98)
+trend_pred <- predict(model_ar, n.ahead=52)$pred
 
+growth_predict <- season_predict + trend_pred
+last_data_point <- data_train[nrow(data_train),]$flu
+flu_predict <- cumsum(growth_predict) + last_data_point
 
+### 4.
+
+dat <- agg_data[(date_col > '2018-01-01') & (date_col < '2019-01-01'),]
+dat$flu_pred <- flu_predict
+
+par(mfcol=c(1,2))
+plot(dat$flu, type='l')
+plot(dat$flu_pred, type='l')
+
+dat$pred_percentage <- with(dat, flu_pred/total)
+mae <- sum(abs(dat$percentage - dat$pred_percentage))
 
 
