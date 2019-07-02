@@ -24,7 +24,8 @@ agg_data <- data[, .(flu=sum(類流感健保就診人次), total=sum(健保就�
 agg_data$percentage <- with(agg_data, flu/total)
 agg_data$time <- with(agg_data, paste0(年,'-',週))
 plot(agg_data$flu, type = 'l')
-
+output_path <- 'C:/Users/CJSCOPE/Documents/git-repository/time-series-modeling/aggregate_data.csv'
+write.table(agg_data, output_path, quote = F, row.names = F, sep = ',')
 ### 3.
 
 ## Suspect for autocorrelation
@@ -68,8 +69,6 @@ top_period <- 1/ (head(period_df[order(-period_df$spec),], 5)$freq)
 ts_data <- ts(data_train[, .(date_col, growth)], frequency = 52)
 decompose_mul <- decompose(ts_data[,2], type="multi")
 plot(decompose_mul)
-decompose_add <- decompose(ts_data[,2], type="addi")
-plot(decompose_add)
 
 stlts <- stl(ts_data[,2], s.window = "periodic")
 seasonal_ <- stlts$time.series[, "seasonal"]
@@ -103,10 +102,12 @@ info <- data.frame(matrix(vec, nrow=100, ncol=2, byrow=TRUE))
 colnames(info) <- c('Lagged', 'AIC')
 # -> choose lagged time = 98 weeks -> consider AR(p=98) for trend data
 which.min(info$AIC)
+# min at 98
 model_ar <- ar.ols(trend_, order=98)
 trend_pred <- predict(model_ar, n.ahead=52)$pred
 
-growth_predict <- season_predict + trend_pred
+## prediction
+growth_predict <- season_predict * trend_pred
 last_data_point <- data_train[nrow(data_train),]$flu
 flu_predict <- cumsum(growth_predict) + last_data_point
 
@@ -114,12 +115,14 @@ flu_predict <- cumsum(growth_predict) + last_data_point
 
 dat <- agg_data[(date_col > '2018-01-01') & (date_col < '2019-01-01'),]
 dat$flu_pred <- flu_predict
-
-par(mfcol=c(1,2))
-plot(dat$flu, type='l')
-plot(dat$flu_pred, type='l')
-
 dat$pred_percentage <- with(dat, flu_pred/total)
 mae <- sum(abs(dat$percentage - dat$pred_percentage))
 
+par(mfcol=c(1,2))
+plot(dat$percentage, type='l', xlab='week', ylab='流感百分比', main='Ground Truth', ylim=c(0.008, 0.03))
+plot(dat$pred_percentage, type='l', xlab='week', ylab='流感百分比', main='prediction', ylim=c(0.008, 0.03))
+
+output_path <- 'C:/Users/CJSCOPE/Documents/git-repository/time-series-modeling/flu_prediction.csv'
+write.table(dat, output_path, quote = F, row.names = F, sep = ',')
+## ->MAE = 0.605
 
