@@ -40,8 +40,9 @@ fill_na_date_col <- function(date_col) {
 }
 date_col <- fill_na_date_col(date_col)
 agg_data$date_col <- date_col
+data_train <- agg_data[date_col < '2018-01-01',]
 
-model <- lm(flu ~ date_col, data=agg_data)
+model <- lm(flu ~ date_col, data=data_train)
 library(lmtest)
 dwtest(model)
 # p-value < 2.2e-16 -> Reject Ho: No autocorrelation
@@ -49,26 +50,61 @@ dwtest(model)
 
 ## Growth rate
 # plot(diff(log(agg_data$flu), differences = 1), type='l')
-agg_data$growth <- c(0, diff(agg_data$flu, differences = 1))
+data_train$growth <- c(0, diff(data_train$flu, differences = 1))
 
 ## Stationary
 library(tseries)
 library(forecast)
-adf.test(agg_data$flu)
+adf.test(data_train$flu)
 # p-value = 0.01 -> Reject Ho: Data not stationary
 # -> Data is stationary.
 
-plot(agg_data$date_col, agg_data$flu, type = 'l')
-data_train <- agg_data[date_col < '2018-01-01',]
+plot(data_train$date_col, data_train$growth, type = 'l')
+library(TSA)
+period <- periodogram(data_train$growth)
+period_df <- data.frame(freq=period$freq, spec=period$spec)
+top_period <- 1/ (head(period_df[order(-period_df$spec),], 5)$freq)
 
-ts_data <- ts(data_train$flu, frequency = 52)
+## Seasonal and trend decomposition
+ts_data <- ts(data_train[, .(date_col, growth)], frequency = 52)
+decompose_mul <- decompose(ts_data[,2], type="multi")
+plot(decompose_mul)
+decompose_add <- decompose(ts_data[,2], type="addi")
+plot(decompose_add)
+
+stlts <- stl(ts_data[,2], s.window = "periodic")
+seasonal_ <- stlts$time.series[, "seasonal"]
+trend_ <- stlts$time.series[, "trend"]
+comp_df <- data.frame(stlts$time.series[, c('seasonal', 'trend', 'remainder')])
+comp_df$total <- rowSums(comp_df)
+plot(seasonal_, type='l')
+
+# seasonal pattern looks regularly, use naive model
+f_season <- forecast(decompose_mul$seasonal, method='naive', h = 52)
+# -> point estimation = f_season$mean
+plot(f_season, type='l')
+
+# Autoregression for trend data
+# choose lagged weeks
+vec <- c()
+for (p in c(1:20)) {
+  model_ar <- ar.ols(trend_, order = p)
+  aic <- log(sum(model_ar$resid^2, na.rm=T)/model_ar$n.used) + 2*(p+1)/model_ar$n.used
+  if(do.call(sum, model_ar[2]) <　1) {
+    stationary <- TRUE
+  } else {
+    stationary <- FALSE
+  }
+  if (stationary == TRUE) {
+    vec <- c(vec, as.integer(p), aic)
+  }
+}
+info <- data.frame(matrix(vec, nrow=20, ncol=2, byrow=TRUE))
+colnames(info) <- c('Lagged', 'AIC')
+# -> choose lagged time = 18 weeks -> consider AR(p=14) for trend data
+model_ar <- ar.ols(trend_, order=14)
+predict(model_ar, n.ahead=52)$pred
 
 
 
 
-decomposedRes <- decompose(ts_data, type="multi")
-plot (decomposedRes)
-decomposedRes <- decompose(ts_data, type="addi")
-plot (decomposedRes)
-
-stlRes <- stl(ts_data, s.window = "periodic")
